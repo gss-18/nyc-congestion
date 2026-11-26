@@ -82,3 +82,72 @@ Change in trips, Jan 6 - Sep 30 of each year:
    ignoring it attributes the old trend to the policy.*
 2. Why can't yellow outside-zone trips serve as a control here? *They changed a lot for reasons unrelated to the toll.*
 3. Why aggregate before analysis? *1 billion rows -> 0.3M; every later step becomes seconds, not minutes.*
+
+---
+
+## Step 5: Causal analysis
+
+**Question:** how much did congestion pricing change Uber/Lyft trips in the zone?
+**Data check first:** the Uber/Lyft fee is a flat **$1.50 at all hours** (fee per trip by hour, from the data);
+the car toll is what varies by time of day.
+
+### Setup (`panel.py`)
+
+- Unit = taxi zone, period = month. Outcome = log(pickups).
+- **Treated:** 37 inside zones. **Control:** 207 outside zones with >= 1,000 Uber/Lyft pickups a month in 2024.
+  **Dropped:** airports (driven by flights), unknown zones, border zones (except in the spillover test).
+- January 2025 counts as treated (tolling began Jan 5: 27 of 31 days).
+
+### Methods (`causal.py`)
+
+1. **Raw event study (two-way fixed effects).** `log y = zone effect + month effect + b_k x treated x [k months
+   from policy]`, with cluster-robust (by zone) errors. It only *shows* the pattern; it does not adjust for trends.
+2. **Imputation DiD** (Borusyak, Jaravel & Spiess 2024), the main estimator:
+   - fit zone + month effects **plus a treated-group linear trend and treated-group seasonality**, using only
+     untreated rows (all controls + treated before 2025);
+   - predict the treated zones' counterfactual after 2025; effect = actual vs counterfactual.
+   - **95% CI by bootstrapping zones** (resample zones, refit 200 times), which respects correlation over time.
+   - Tested on fake data: recovers a known -9.5% despite a pre-trend; ignoring the trend gives < -13%.
+3. **Synthetic control** (weekly): non-negative donor weights summing to 1 that match total inside pickups before
+   2025. **Placebo in space:** pretend each of 40 big donors was treated; p-value = how often a placebo breaks away
+   as much as the real zone (post/pre RMSPE ratio).
+4. **Placebo in time:** fake policy in July 2024, using only 2023-2024 data. A valid method should find ~0.
+
+```bash
+uv run python scripts/causal_analysis.py   # ~3 min -> runs/causal/results.json, event_study.png, synthetic_control.png
+```
+
+### Results (Uber/Lyft pickups inside the zone)
+
+| Method | Effect | 95% CI |
+|---|---|---|
+| Naive (no trend, no seasonality) | **-15.9%** | - |
+| Seasonality only | -16.0% | - |
+| **Trend + seasonality (main)** | **-1.4%** | -2.7% to -0.1% |
+| Placebo, fake policy Jul 2024 | -0.2% | -1.2% to +1.0% |
+| Synthetic control (weekly) | -5.8% | placebo p = 0.39 (not significant) |
+| Post window 2025 only | -0.7% | - |
+
+Other outcomes (trend + seasonality): dropoffs -1.6% (CI -3.4 to +0.5); peak hours -1.0% (CI -2.5 to +0.4);
+off-peak -2.5% (CI -3.9 to -0.5); border zones (spillover) -1.4% (CI -4.2 to +1.9). Yellow taxi: unstable
+(aggregate -6.3%, mean zone +12.7%), not reliable because of the market-wide 2025 taxi surge.
+
+### What it means
+
+1. **The naive answer (-16%) is almost all pre-existing trend.** The raw event study falls ~8% a year relative to
+   outside zones from 2023 onward, with **no visible break at January 2025**.
+2. **After adjusting, the effect on Uber/Lyft trips is small: about -1.4%,** borderline significant, and not robust
+   (synthetic control is not significant; the 2025-only window gives -0.7%).
+3. **The method passes its placebo** (-0.2%, CI spans 0), so the adjustment is not just erasing everything.
+4. Honest caveat: a linear trend extrapolated 21 months is an assumption. Month-by-month effects swing between
+   about -9% and +3%, so treat the point estimate as "small", not as a precise number.
+5. Plausible reading: a $1.50 fee on a ~$30 average ride is ~5%; small price changes move rideshare demand little.
+
+### Check yourself
+
+1. Why does the naive estimate say -16%? *It counts a decline that started two years earlier.*
+2. What does a placebo test protect against? *A method that "finds" effects where none can exist.*
+3. Why bootstrap zones instead of rows? *Rows from one zone are correlated over time; resampling rows overstates
+   precision.*
+4. Why is synthetic control not significant even though it shows -5.8%? *Many untreated zones break away from
+   their synthetic match just as much (p = 0.39).*
