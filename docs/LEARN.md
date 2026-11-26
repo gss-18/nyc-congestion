@@ -151,3 +151,113 @@ off-peak -2.5% (CI -3.9 to -0.5); border zones (spillover) -1.4% (CI -4.2 to +1.
    precision.*
 4. Why is synthetic control not significant even though it shows -5.8%? *Many untreated zones break away from
    their synthetic match just as much (p = 0.39).*
+
+---
+
+## Step 6: Day-ahead forecasting (`forecast.py`, `scripts/forecast.py`)
+
+**Task:** every evening, forecast each hour of tomorrow's Uber/Lyft pickups for the 80 busiest zones
+(2.57M zone-hours).
+
+**The one rule:** every feature for hour t uses only trips up to **t - 24 h**. Tests check this (`test_forecast.py`).
+Break it and the backtest looks great but the model cannot run in real life (leakage).
+
+Features: lags 24/48/168/336 h, same-hour mean of the last 7 days, 24 h mean, a short-vs-long trend ratio,
+hour/day/month, NY holidays, inside-zone and post-policy flags, hourly weather (Open-Meteo archive).
+Model: LightGBM with a **Poisson** objective (counts), 500 rounds.
+
+**Backtest = rolling origin:** for each month Apr-Sep 2026, train on everything before it, predict that month.
+This mimics real use; a random train/test split would let the model peek at neighbouring hours.
+
+**Metric: WAPE** = total absolute error / total trips. Unlike MAPE, it does not blow up on hours with ~0 trips.
+
+| Model | WAPE (Apr-Sep 2026) | Inside zone | Outside |
+|---|---|---|---|
+| **LightGBM** | **11.7%** | 12.4% | 11.4% |
+| Same hour last week | 15.5% | 16.7% | 14.9% |
+| 7-day same-hour mean | 22.9% | 24.7% | 21.9% |
+| Same hour yesterday | 23.6% | 24.9% | 22.8% |
+
+- **25% less error than the best baseline**, every month (10.5-13.0% vs 13.6-17.5%).
+- The 7-day mean is poor because it mixes weekdays and weekends; "same hour last week" respects the weekly cycle.
+- **Feature importance:** lag 168 h (same hour last week) 69%, lag 336 h 22%. Weather barely matters day-ahead
+  once recent demand is known.
+- **Prediction intervals** (p10/p90 quantile models): 78.8% of actuals inside, target 80%: well calibrated.
+- **Structural break:** trained only on pre-toll data, forecasting Jan-Mar 2025 still gives 11.7% WAPE (bias +1.3%).
+  Day-ahead lags adapt within a week, so a small level shift barely hurts. A month-ahead model would suffer more.
+
+Experiments are logged to **MLflow** (`sqlite:///mlruns.db`): `uv run mlflow ui --backend-store-uri sqlite:///mlruns.db`.
+
+---
+
+## Step 7: Switchback experiment design
+
+**Problem:** to test a price change in a marketplace you cannot randomize riders: treated and control riders
+share the same drivers, so one group's treatment changes the other's experience (**interference**).
+**Switchback:** randomize **time blocks** instead. The whole area is treated or control for L hours, then a coin
+flip decides the next block.
+
+**Study** (`switchback.py`, `scripts/switchback_study.py`): real hourly Uber/Lyft pickups inside the zone,
+12 weeks (Apr-Jun 2026, ~6,900 pickups/hour). Inject a known **-2%** effect that kicks in gradually
+(**carryover**, half-life 1 hour). 500 random assignments per design. Measure bias, RMSE, 95% CI coverage, power.
+
+Estimators: difference in means; + hour-of-week fixed effects; + CUPED (covariate = same hour last week);
++ 1-hour burn-in (drop the first hour of each block). Standard errors are **clustered by block** (hours in one
+block share one coin flip).
+
+| Block | Estimator | Bias (pts) | RMSE (pts) | CI coverage | Power |
+|---|---|---|---|---|---|
+| 1h | + FE | +1.01 | 1.16 | 0.51 | 0.49 |
+| 2h | + FE + CUPED + burn-in | +0.53 | 0.93 | 0.87 | 0.50 |
+| **4h** | **+ FE + CUPED + burn-in** | **+0.29** | **1.08** | **0.91** | **0.43** |
+| 8h | + FE + CUPED + burn-in | +0.10 | 1.24 | 0.93 | 0.39 |
+| 24h | + FE | +0.10 | 1.43 | 0.94 | 0.28 |
+| any | difference in means | small | 2.8-6.1 | ~0.95 | ~0.06 |
+
+**Lessons:**
+
+1. **Short blocks are biased toward zero** by carryover (1h blocks recover only half the effect) and their CIs
+   are wrong (51% coverage instead of 95%).
+2. **Hour-of-week fixed effects are the big win**: RMSE drops 3-5x vs a plain difference in means, because demand
+   swings by time of day far more than the effect.
+3. **A short burn-in removes most carryover bias** for little cost. Best valid design here: **4-hour blocks +
+   FE + burn-in**.
+4. **CUPED added nothing here**: hour-of-week FE already capture what "same hour last week" knows. CUPED helps when
+   the covariate carries information the design does not already use.
+5. **Power is only ~43% for a 2% effect in 12 weeks.** Power grows with the square root of duration, so 80% power
+   needs roughly 30 weeks, or a bigger effect. Run this simulation before launching, not after.
+
+---
+
+## Step 8: Drift monitoring (`drift.py`, `scripts/drift_report.py`)
+
+**PSI (Population Stability Index):** bin the reference distribution into deciles, then
+`PSI = sum (now% - ref%) * ln(now% / ref%)`. Rule of thumb: < 0.1 stable, 0.1-0.2 watch, > 0.2 alert.
+
+Each month of 2025-2026 is compared with the **same month of 2024**, so normal seasonality is not called drift.
+
+**Findings:**
+
+- **Demand (`y`, `lag_168`) barely drifted:** PSI < 0.05 every month, consistent with the small causal effect.
+- **Temperature alerts** come from year-to-year weather. Feb 2026 was far colder than Feb 2024 (PSI 1.53), the same
+  month the causal analysis shows a -9% dip: worth noting, not proof.
+- **`trend_ratio` alerts often**, but it sits tightly around 1.0, so tiny shifts move many points across decile
+  edges. **Lesson: PSI thresholds are not universal**; narrow features need their own thresholds or a different test.
+
+---
+
+## Step 9: Serving (`api.py`, `Dockerfile`)
+
+FastAPI service:
+
+- `GET /forecast?zone=161&date=2026-10-01` -> 24 hourly forecasts with p10 / p50 / p90.
+- **Day-ahead only:** refuses dates more than one day past the data, because features need trips >= 24 h old.
+- If the day has no recorded weather, it uses that month's average weather per hour and says so in the response
+  (`weather_source`). A production version would call a weather forecast API instead.
+
+```bash
+uv run uvicorn nyc_congestion.api:app --reload      # http://127.0.0.1:8000/docs
+docker build -t nyc-forecast . && docker run -p 8000:8000 -v "$PWD/runs:/app/runs" -v "$PWD/data:/app/data" nyc-forecast
+```
+
+CI (`.github/workflows/ci.yml`): every push runs `ruff` and `pytest` (tests use small fake data, no downloads).
