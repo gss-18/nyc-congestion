@@ -82,6 +82,8 @@ p { margin: 0; }
 .verdict .num.struck { color: var(--ink-2); text-decoration: line-through; text-decoration-thickness: 3px; text-decoration-color: var(--policy); }
 .verdict .num.real { background: var(--taxi); color: #1d2226; display: inline-block; padding: 0 0.15em; }
 .verdict .note { margin-top: 0.7rem; font-size: 0.92rem; color: var(--ink-2); }
+.byline { margin-top: 1.1rem; font-size: 1rem; color: var(--ink-2); }
+.byline a { color: var(--ink); font-weight: 600; text-decoration: none; border-bottom: 2px solid var(--taxi); }
 .hero .sub { margin-top: 1.6rem; max-width: 60ch; font-size: 1.12rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.8rem; }
 .btn {
@@ -214,6 +216,7 @@ footer .row { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: spac
   <header class="hero">
     <p class="kicker">NYC congestion pricing · Jan 2023 – Sep 2026</p>
     <h1 style="margin-top:1.2rem">Did congestion pricing cut Uber and Lyft trips?</h1>
+    <p class="byline">By <a href="https://github.com/gss-18">Trivikram Sridevi</a> · Data Scientist, Applied AI</p>
     <div class="verdict" aria-label="Headline result">
       <div>
         <div class="label">Naive before/after comparison</div>
@@ -257,7 +260,7 @@ footer .row { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: spac
   <section id="data">
     <div class="col stack">
       <p class="kicker">From raw trips to evidence</p>
-      <h2>One billion rows, one laptop</h2>
+      <h2>One billion trips, four steps</h2>
       <p>Monthly trip files from the NYC Taxi &amp; Limousine Commission are aggregated with DuckDB into small hourly tables. The tolled zones are identified from the fee actually charged on each trip, not from a hand-drawn map.</p>
     </div>
     <div class="pipe">
@@ -361,6 +364,7 @@ footer .row { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: spac
 
   <footer>
     <div class="row">
+      <p>Analysis by <strong>Trivikram Sridevi</strong> · <a href="https://www.linkedin.com/in/gss-trivikram/">LinkedIn</a> · <a href="https://github.com/gss-18">GitHub</a></p>
       <p>Data: <a href="https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page">NYC TLC trip records</a> · weather from <a href="https://open-meteo.com">Open-Meteo</a>. Tolling began 5 January 2025.</p>
       <p><a class="repo-link" data-path="/blob/main/docs/MODEL_CARD.md" href="#">Model card</a> · <a class="repo-link" data-path="/blob/main/docs/LEARN.md" href="#">Methodology</a> · <a class="repo-link" data-path="" href="#">Code</a></p>
     </div>
