@@ -106,7 +106,9 @@ the car toll is what varies by time of day.
    - fit zone + month effects **plus a treated-group linear trend and treated-group seasonality**, using only
      untreated rows (all controls + treated before 2025);
    - predict the treated zones' counterfactual after 2025; effect = actual vs counterfactual.
-   - **95% CI by bootstrapping zones** (resample zones, refit 200 times), which respects correlation over time.
+   - **95% CI by bootstrapping zones** (resample zones, refit 1,000 times), which respects correlation over time.
+     Zones are sorted before resampling and the panel is read with `ORDER BY`: DuckDB does not guarantee row order,
+     and an earlier unsorted run gave a slightly different interval with the same seed.
    - Tested on fake data: recovers a known -9.5% despite a pre-trend; ignoring the trend gives < -13%.
 3. **Synthetic control** (weekly): non-negative donor weights summing to 1 that match total inside pickups before
    2025. **Placebo in space:** pretend each of 40 big donors was treated; p-value = how often a placebo breaks away
@@ -123,25 +125,30 @@ uv run python scripts/causal_analysis.py   # ~3 min -> runs/causal/results.json,
 |---|---|---|
 | Naive (no trend, no seasonality) | **-15.9%** | - |
 | Seasonality only | -16.0% | - |
-| **Trend + seasonality (main)** | **-1.4%** | -2.7% to -0.1% |
-| Placebo, fake policy Jul 2024 | -0.2% | -1.2% to +1.0% |
+| **Trend + seasonality (main), total trips** | **-1.4%** | -2.9% to +0.1% |
+| Same model, average zone | -1.7% | -3.0% to -0.3% |
+| Placebo, fake policy Jul 2024 | -0.2% | -1.3% to +0.9% |
 | Synthetic control (weekly) | -5.8% | placebo p = 0.39 (not significant) |
 | Post window 2025 only | -0.7% | - |
 
-Other outcomes (trend + seasonality): dropoffs -1.6% (CI -3.4 to +0.5); peak hours -1.0% (CI -2.5 to +0.4);
-off-peak -2.5% (CI -3.9 to -0.5); border zones (spillover) -1.4% (CI -4.2 to +1.9). Yellow taxi: unstable
+Other outcomes (trend + seasonality, total trips): dropoffs -1.6% (CI -3.4 to +0.2); peak hours -1.0% (CI -2.4 to +0.4);
+off-peak -2.5% (CI -4.0 to -0.7); border zones (spillover) -1.4% (CI -4.3 to +1.6). Yellow taxi: unstable
 (aggregate -6.3%, mean zone +12.7%), not reliable because of the market-wide 2025 taxi surge.
 
 ### What it means
 
 1. **The naive answer (-16%) is almost all pre-existing trend.** The raw event study falls ~8% a year relative to
    outside zones from 2023 onward, with **no visible break at January 2025**.
-2. **After adjusting, the effect on Uber/Lyft trips is small: about -1.4%,** borderline significant, and not robust
+2. **After adjusting, the effect on total Uber/Lyft trips is about -1.4% and not statistically different from zero**
+   (interval -2.9% to +0.1%). The average zone shows a small but significant -1.7%. Neither is robust
    (synthetic control is not significant; the 2025-only window gives -0.7%).
 3. **The method passes its placebo** (-0.2%, CI spans 0), so the adjustment is not just erasing everything.
-4. Honest caveat: a linear trend extrapolated 21 months is an assumption. Month-by-month effects swing between
+4. **Two estimands.** "Total trips" weights each zone by its volume (the policy question: how many fewer trips?).
+   "Average zone" weights a quiet zone the same as Times Square. They differ because the effect is a little larger
+   in smaller zones.
+5. Caveat: a linear trend extrapolated 21 months is an assumption. Month-by-month effects swing between
    about -9% and +3%, so treat the point estimate as "small", not as a precise number.
-5. Plausible reading: a $1.50 fee on a ~$30 average ride is ~5%; small price changes move rideshare demand little.
+6. Plausible reading: the average Uber/Lyft trip starting in the zone cost $34.21 before fees in 2025, so $1.50 is about 4%; a price change that small moves rideshare demand little.
 
 ### Check yourself
 

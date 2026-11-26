@@ -68,11 +68,11 @@ def imputation_did(df: pd.DataFrame, policy_start: str, treated_group: str = "in
     )
 
 
-def bootstrap(df: pd.DataFrame, policy_start: str, reps: int = 200, seed: int = 42, **kw) -> ImputationResult:
+def bootstrap(df: pd.DataFrame, policy_start: str, reps: int = 1000, seed: int = 42, **kw) -> ImputationResult:
     """Point estimate plus 95% intervals from resampling zones (within each group) with replacement."""
     res = imputation_did(df, policy_start, **kw)
     rng = np.random.default_rng(seed)
-    groups = {g: z["zone"].unique() for g, z in df.groupby("group")}
+    groups = {g: np.sort(z["zone"].unique()) for g, z in df.groupby("group")}  # sorted: reproducible draws
     agg, mean = [], []
     for _ in range(reps):
         parts = []

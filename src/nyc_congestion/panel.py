@@ -23,8 +23,9 @@ def load_panel(agg: Path, service: str = "fhvhv", direction: str = "pickup", fre
     where service = '{service}' and direction = '{direction}'
       and hour >= '{start}' and hour < '{end}' {where}
     group by all
+    order by zone, period
     """
-    df = duckdb.connect().execute(q).df()
+    df = duckdb.connect().execute(q).df()  # ORDER BY: DuckDB row order is not stable across runs
     df["period"] = pd.to_datetime(df["period"])
     return df
 

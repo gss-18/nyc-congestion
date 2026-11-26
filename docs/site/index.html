@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Did Congestion Pricing Cut Rideshare Trips?</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="A causal-inference and forecasting case study on 1.06 billion NYC taxi and Uber/Lyft trips around Manhattan's January 2025 congestion pricing.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column (~66ch) for the story; figures break out to a wider measure. Editorial, block-based. */
+:root {
+  --paper: #f4f5f2;        /* cool off-white, faint green-grey bias */
+  --paper-2: #e9ebe6;      /* figure ground */
+  --ink: #1d2226;          /* charcoal */
+  --ink-2: #4c555c;        /* secondary text */
+  --rule: #c9cec8;
+  --mta: #0039a6;          /* MTA blue: the accent */
+  --mta-soft: rgba(0, 57, 166, 0.14);
+  --taxi: #f2b705;         /* taxi yellow: key highlight only */
+  --policy: #d9480f;       /* policy start marker */
+  --good: #2b7a4b;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 66ch;
+  --wide: 1080px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121619; --paper-2: #1b2125; --ink: #e8ebe7; --ink-2: #a3acb2; --rule: #343c42;
+    --mta: #6f9bff; --mta-soft: rgba(111, 155, 255, 0.18); --taxi: #f5c430; --policy: #ff7a45; --good: #5fc28a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121619; --paper-2: #1b2125; --ink: #e8ebe7; --ink-2: #a3acb2; --rule: #343c42;
+  --mta: #6f9bff; --mta-soft: rgba(111, 155, 255, 0.18); --taxi: #f5c430; --policy: #ff7a45; --good: #5fc28a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 17px/1.6 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--mta); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--mta); outline-offset: 3px; border-radius: 2px; }
+.wrap { max-width: var(--wide); margin: 0 auto; }
+.col { max-width: var(--measure); }
+section { padding-block: 4.5rem; border-top: 1px solid var(--rule); }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h2 { font-size: clamp(1.7rem, 3.4vw, 2.5rem); font-weight: 750; font-stretch: 112%; line-height: 1.08; letter-spacing: -0.01em; }
+h3 { font-size: 1.05rem; font-weight: 700; font-stretch: 100%; }
+p { margin: 0; }
+.stack > * + * { margin-top: 1rem; }
+.kicker {
+  font: 600 0.72rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.14em; color: var(--mta);
+  display: flex; align-items: center; gap: 0.6rem;
+}
+.kicker::before { content: ""; width: 0.9rem; height: 0.9rem; border-radius: 50%; background: var(--mta); }
+.lede { font-size: 1.15rem; color: var(--ink-2); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-2); }
+.small { font-size: 0.86rem; }
+
+/* Hero */
+.hero { padding-block: 4rem 3.5rem; border-top: 0; }
+.hero h1 { font-size: clamp(2.3rem, 6.4vw, 4.6rem); font-weight: 800; font-stretch: 118%; line-height: 0.98; letter-spacing: -0.02em; max-width: 16ch; }
+.verdict { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 2.5rem; max-width: 760px; border: 2px solid var(--ink); }
+.verdict > div { padding: 1.4rem 1.5rem 1.3rem; min-width: 0; }
+.verdict > div + div { border-left: 2px solid var(--ink); }
+.verdict .label { font: 600 0.74rem/1.2 var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-2); }
+.verdict .num { font: 600 clamp(2.6rem, 7vw, 4.2rem)/1 var(--font-mono); font-variant-numeric: tabular-nums; margin-top: 0.6rem; letter-spacing: -0.03em; }
+.verdict .num.struck { color: var(--ink-2); text-decoration: line-through; text-decoration-thickness: 3px; text-decoration-color: var(--policy); }
+.verdict .num.real { background: var(--taxi); color: #1d2226; display: inline-block; padding: 0 0.15em; }
+.verdict .note { margin-top: 0.7rem; font-size: 0.92rem; color: var(--ink-2); }
+.hero .sub { margin-top: 1.6rem; max-width: 60ch; font-size: 1.12rem; }
+.actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.8rem; }
+.btn {
+  font: 600 0.95rem/1 var(--font-body); padding: 0.85rem 1.15rem; border: 2px solid var(--ink); color: var(--ink);
+  text-decoration: none; background: transparent; display: inline-flex; align-items: center; gap: 0.5rem;
+}
+.btn.primary { background: var(--mta); border-color: var(--mta); color: #fff; }
+.btn:hover { transform: translateY(-1px); }
+
+/* Figures */
+figure { margin: 2.2rem 0 0; background: var(--paper-2); padding: 1.4rem 1.4rem 1rem; min-width: 0; }
+figcaption { font-size: 0.86rem; color: var(--ink-2); margin-top: 0.7rem; max-width: 80ch; }
+.chart { width: 100%; overflow-x: auto; }
+.chart svg { display: block; width: 100%; height: auto; min-width: 560px; }
+svg text { fill: var(--ink-2); font-family: var(--font-mono); font-size: 11px; }
+svg .ink { fill: var(--ink); }
+svg .axis { stroke: var(--rule); stroke-width: 1; }
+svg .zero { stroke: var(--ink-2); stroke-width: 1; }
+svg .policy { stroke: var(--policy); stroke-width: 2; stroke-dasharray: 5 4; }
+svg .policy-label { fill: var(--policy); font-weight: 600; }
+svg .dot { fill: var(--mta); }
+svg .dot.post { fill: var(--policy); }
+svg .whisker { stroke: var(--mta); stroke-width: 1.3; }
+svg .whisker.post { stroke: var(--policy); }
+svg .trend { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 2 4; fill: none; }
+svg .annot { fill: var(--ink); font-family: var(--font-body); font-size: 12.5px; font-weight: 600; }
+svg .annot-line { stroke: var(--ink); stroke-width: 1; fill: none; }
+svg .band { fill: var(--mta-soft); }
+svg .line { stroke: var(--mta); stroke-width: 2; fill: none; }
+svg .actual { stroke: var(--ink); stroke-width: 1.2; fill: none; }
+svg .bar { fill: var(--mta); }
+svg .bar.neg { fill: var(--mta); }
+svg .bar.pos { fill: var(--ink-2); opacity: 0.55; }
+svg .avg { stroke: var(--policy); stroke-width: 2; }
+
+/* Pipeline */
+.pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 2rem; border: 2px solid var(--ink); }
+.pipe > div { padding: 1.1rem 1.1rem 1.2rem; min-width: 0; position: relative; }
+.pipe > div + div { border-left: 2px solid var(--ink); }
+.pipe .step { font: 600 0.7rem/1 var(--font-mono); color: var(--mta); letter-spacing: 0.1em; }
+.pipe h3 { margin-top: 0.55rem; }
+.pipe p { font-size: 0.9rem; color: var(--ink-2); margin-top: 0.35rem; }
+.uses { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+.uses > a { border: 1px solid var(--rule); padding: 0.75rem 0.9rem; text-decoration: none; color: var(--ink); min-width: 0; }
+.uses > a span { display: block; font-size: 0.82rem; color: var(--ink-2); margin-top: 0.15rem; }
+.uses > a:hover { border-color: var(--mta); }
+.stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; margin-top: 2rem; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); }
+.stats > div { padding: 1rem 0.9rem 1rem 0; min-width: 0; }
+.stats .v { font: 600 1.5rem/1.1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.stats .k { font-size: 0.8rem; color: var(--ink-2); margin-top: 0.3rem; }
+
+/* Evidence table */
+.evidence { margin-top: 2rem; overflow-x: auto; }
+.evidence table { width: 100%; border-collapse: collapse; min-width: 620px; }
+.evidence th, .evidence td { text-align: left; padding: 0.85rem 0.8rem 0.85rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.evidence th { font: 600 0.72rem/1.2 var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-2); border-bottom: 2px solid var(--ink); }
+.evidence td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.evidence td.ci { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-2); }
+.pill { font: 600 0.72rem/1 var(--font-mono); padding: 0.3rem 0.5rem; border: 1px solid currentColor; white-space: nowrap; display: inline-block; }
+.pill.warn { color: var(--policy); }
+.pill.ok { color: var(--good); }
+.pill.neutral { color: var(--ink-2); }
+.callout { margin-top: 2rem; border-left: 4px solid var(--taxi); padding: 0.2rem 0 0.2rem 1.1rem; max-width: var(--measure); }
+
+/* Forecast */
+.tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.6rem; }
+.tabs button {
+  font: 600 0.88rem/1 var(--font-body); padding: 0.6rem 0.85rem; border: 1.5px solid var(--rule); background: transparent;
+  color: var(--ink); cursor: pointer;
+}
+.tabs button[aria-pressed="true"] { border-color: var(--mta); background: var(--mta); color: #fff; }
+.legend { display: flex; flex-wrap: wrap; gap: 1.2rem; font-size: 0.82rem; color: var(--ink-2); margin-top: 0.6rem; }
+.legend i { display: inline-block; width: 1.4rem; height: 0.7rem; vertical-align: middle; margin-right: 0.4rem; }
+.cmp { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 2rem; border-top: 2px solid var(--ink); }
+.cmp > div { padding: 0.9rem 0.9rem 0.9rem 0; border-bottom: 1px solid var(--rule); min-width: 0; }
+.cmp .v { font: 600 1.6rem/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.cmp .k { font-size: 0.82rem; color: var(--ink-2); margin-top: 0.35rem; }
+.cmp .best .v { color: var(--mta); }
+
+/* Switchback */
+.blocks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 2rem; border: 2px solid var(--ink); }
+.blocks > div { padding: 1.2rem; min-width: 0; }
+.blocks > div + div { border-left: 2px solid var(--ink); }
+.blocks .len { font: 700 2rem/1 var(--font-display); font-stretch: 118%; }
+.blocks .chosen { background: var(--taxi); color: #1d2226; }
+.blocks .chosen .muted { color: #3c3f35; }
+.blocks p { margin-top: 0.5rem; font-size: 0.92rem; }
+.timeline { display: flex; height: 18px; margin-top: 0.8rem; gap: 2px; }
+.timeline span { flex: 1; background: var(--mta); }
+.timeline span.c { background: var(--rule); }
+.chosen .timeline span.c { background: rgba(29, 34, 38, 0.25); }
+.chosen .timeline span { background: #1d2226; }
+
+/* Production */
+.prod { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 2rem; border-top: 2px solid var(--ink); }
+.prod > div { padding: 1rem 1rem 1.1rem 0; border-bottom: 1px solid var(--rule); min-width: 0; }
+.prod h3 { font-size: 1rem; }
+.prod p { font-size: 0.9rem; color: var(--ink-2); margin-top: 0.3rem; }
+pre.code {
+  margin: 1.6rem 0 0; background: var(--paper-2); padding: 1rem 1.1rem; overflow-x: auto;
+  font: 400 0.82rem/1.55 var(--font-mono); color: var(--ink);
+}
+footer { padding-block: 3rem 4rem; border-top: 2px solid var(--ink); font-size: 0.9rem; color: var(--ink-2); }
+footer .row { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: space-between; }
+
+@media (max-width: 860px) {
+  .pipe, .uses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pipe > div:nth-child(3) { border-left: 0; }
+  .pipe > div:nth-child(n+3) { border-top: 2px solid var(--ink); }
+  .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cmp { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .prod { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  section { padding-block: 3.2rem; }
+  .verdict { grid-template-columns: 1fr; }
+  .verdict > div + div { border-left: 0; border-top: 2px solid var(--ink); }
+  .pipe, .uses, .blocks, .prod { grid-template-columns: 1fr; }
+  .pipe > div + div, .blocks > div + div { border-left: 0; border-top: 2px solid var(--ink); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  figure { padding: 1rem 0.8rem 0.8rem; }
+}
+@media (prefers-reduced-motion: reduce) { .btn:hover { transform: none; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+  <header class="hero">
+    <p class="kicker">NYC congestion pricing · Jan 2023 – Sep 2026</p>
+    <h1 style="margin-top:1.2rem">Did congestion pricing cut Uber and Lyft trips?</h1>
+    <div class="verdict" aria-label="Headline result">
+      <div>
+        <div class="label">Naive before/after comparison</div>
+        <div class="num struck" id="v-naive">−15.9%</div>
+        <p class="note">Counts a decline that began two years before the toll.</p>
+      </div>
+      <div>
+        <div class="label">Trend-adjusted estimate</div>
+        <div class="num"><span class="real" id="v-main">−1.4%</span></div>
+        <p class="note" id="v-main-note">Small, and the 95% interval nearly reaches zero.</p>
+      </div>
+    </div>
+    <p class="sub">An analysis of <strong>1.06 billion NYC taxi and Uber/Lyft trips</strong> using causal inference, demand forecasting, experiment simulation and a production ML service.</p>
+    <div class="actions">
+      <a class="btn primary" href="#wrong">Explore the analysis</a>
+      <a class="btn repo-link" data-path="" href="#">View on GitHub</a>
+      <a class="btn repo-link" data-path="/blob/main/docs/LEARN.md" href="#">Read the methodology</a>
+    </div>
+  </header>
+
+  <section id="wrong">
+    <div class="col stack">
+      <p class="kicker">The obvious answer is wrong</p>
+      <h2>Trips inside the zone were already falling</h2>
+      <p class="lede">Compare Uber/Lyft pickups in the 37 tolled zones with 207 zones elsewhere in the city, month by month. If the toll caused a drop, the line should break at January 2025.</p>
+    </div>
+    <figure>
+      <div class="chart" id="chart-event" role="img" aria-label="Event study: inside-zone pickups relative to outside zones by month, falling steadily from 2023 with no break at January 2025"></div>
+      <figcaption>Monthly difference in log pickups, inside vs outside zones, relative to December 2024 (two-way fixed effects, 95% intervals clustered by zone). The dotted line is the straight-line trend fitted to the 24 months before tolling.</figcaption>
+    </figure>
+    <div class="col stack" style="margin-top:2rem">
+      <p>The gap shrinks about <strong class="mono" id="t-pretrend">8%</strong> a year from the start of 2023 and keeps going at the same pace after tolling begins. A simple before/after comparison treats all of that decline as the toll's effect. Economists call this a <strong>pre-trend</strong>: the treated and comparison groups were already drifting apart before the policy.</p>
+      <p>The main estimator learns that trend, plus the zone's own seasonal pattern, from the pre-policy months only, then asks how far actual trips fell below that path.</p>
+    </div>
+    <figure>
+      <div class="chart" id="chart-months" role="img" aria-label="Monthly effect after adjusting for trend and seasonality, mostly between minus 4 and plus 3 percent"></div>
+      <figcaption>Inside-zone pickups vs the trend- and season-adjusted counterfactual, each month since tolling began. The orange line is the average over all post-policy months.</figcaption>
+    </figure>
+  </section>
+
+  <section id="data">
+    <div class="col stack">
+      <p class="kicker">From raw trips to evidence</p>
+      <h2>One billion rows, one laptop</h2>
+      <p>Monthly trip files from the NYC Taxi &amp; Limousine Commission are aggregated with DuckDB into small hourly tables. The tolled zones are identified from the fee actually charged on each trip, not from a hand-drawn map.</p>
+    </div>
+    <div class="pipe">
+      <div><div class="step">STEP 1</div><h3>Download</h3><p>90 monthly parquet files, yellow taxi and Uber/Lyft, 24.9 GB.</p></div>
+      <div><div class="step">STEP 2</div><h3>Find the zone</h3><p>Zones where 95–99% of local trips paid the fee are inside; 6 straddling 60th St are set aside.</p></div>
+      <div><div class="step">STEP 3</div><h3>Aggregate</h3><p>DuckDB turns 1.06B trips into zone-by-hour counts in about 4 minutes.</p></div>
+      <div><div class="step">STEP 4</div><h3>Build panels</h3><p>Zone-by-month for causal work, zone-by-hour for forecasting.</p></div>
+    </div>
+    <div class="uses">
+      <a href="#evidence">Causal analysis<span>imputation DiD, synthetic control, placebos</span></a>
+      <a href="#forecast">Forecasting<span>day-ahead hourly demand, 80 zones</span></a>
+      <a href="#experiment">Experiment design<span>switchback simulation on real demand</span></a>
+      <a href="#production">Production<span>API, monitoring, CI</span></a>
+    </div>
+    <div class="stats">
+      <div><div class="v">1.06B</div><div class="k">trips analysed</div></div>
+      <div><div class="v">24.9 GB</div><div class="k">raw data</div></div>
+      <div><div class="v" id="s-inside">37</div><div class="k">tolled zones</div></div>
+      <div><div class="v" id="s-outside">207</div><div class="k">comparison zones</div></div>
+      <div><div class="v" id="s-fzones">80</div><div class="k">forecast zones</div></div>
+      <div><div class="v" id="s-wape">11.7%</div><div class="k">forecast error (WAPE)</div></div>
+    </div>
+  </section>
+
+  <section id="evidence">
+    <div class="col stack">
+      <p class="kicker">Evidence and robustness</p>
+      <h2>Every method points to a small effect</h2>
+      <p>Each estimate is a percentage change in Uber/Lyft pickups inside the zone compared with what the model expects without tolling. Intervals come from resampling whole zones 1,000 times, so correlation within a zone over time is respected.</p>
+    </div>
+    <div class="evidence">
+      <table>
+        <thead><tr><th>Method</th><th>Estimate</th><th>95% interval</th><th>Reading</th></tr></thead>
+        <tbody id="evidence-rows"></tbody>
+      </table>
+    </div>
+    <div class="callout stack">
+      <p><strong>Two ways to average.</strong> <span id="estimand-text"></span></p>
+    </div>
+  </section>
+
+  <section id="forecast">
+    <div class="col stack">
+      <p class="kicker">Forecasting</p>
+      <h2>Tomorrow's demand, hour by hour</h2>
+      <p>Every evening, a LightGBM model forecasts each hour of the next day for the 80 busiest zones. Every input is at least 24 hours old, and tests enforce that rule, so the backtest reflects what the model could really do. Below is one week it never saw during training.</p>
+    </div>
+    <div class="tabs" role="group" aria-label="Choose a zone" id="zone-tabs"></div>
+    <figure style="margin-top:1rem">
+      <div class="chart" id="chart-forecast" role="img" aria-label="Hourly forecast with 80% band against actual pickups for one week"></div>
+      <div class="legend">
+        <span><i style="background:var(--ink);height:2px"></i>Actual pickups</span>
+        <span><i style="background:var(--mta);height:3px"></i>Forecast (median)</span>
+        <span><i style="background:var(--mta-soft)"></i>80% band (p10–p90)</span>
+      </div>
+      <figcaption id="forecast-caption"></figcaption>
+    </figure>
+    <div class="cmp" id="forecast-cmp"></div>
+    <p class="small muted" style="margin-top:0.8rem">Rolling-origin backtest over April–September 2026: train on everything before a month, forecast that month. WAPE is total absolute error divided by total trips.</p>
+  </section>
+
+  <section id="experiment">
+    <div class="col stack">
+      <p class="kicker">Experiment design</p>
+      <h2>How to test a price change when riders share drivers</h2>
+      <p>Randomizing riders breaks down in a marketplace: treated and control riders compete for the same drivers. A <strong>switchback</strong> randomizes time blocks instead, switching the whole area between treatment and control. The block length is the key decision, so it was tested by injecting a known <span class="mono" id="sw-true">−2%</span> effect into 12 weeks of real Manhattan demand and replaying 500 random schedules per design.</p>
+    </div>
+    <div class="blocks" id="blocks"></div>
+    <figure>
+      <div class="chart" id="chart-switch" role="img" aria-label="Bias and error of the switchback estimate by block length"></div>
+      <div class="legend">
+        <span><i style="background:var(--mta);height:3px"></i>Bias (percentage points)</span>
+        <span><i style="background:var(--ink-2);height:3px"></i>Error, RMSE (percentage points)</span>
+      </div>
+      <figcaption>Estimator: hour-of-week fixed effects, plus a 1-hour burn-in for blocks of 2 hours or more. Carryover half-life 1 hour.</figcaption>
+    </figure>
+    <div class="col stack" style="margin-top:2rem">
+      <p><strong>Recommended design:</strong> <span id="sw-best">four-hour blocks, hour-of-week fixed effects and a one-hour burn-in</span>. Even so, power to detect a 2% change in 12 weeks is only about <span class="mono" id="sw-power">43%</span>; reaching 80% would take roughly 30 weeks. Running the simulation before launch is what reveals that.</p>
+    </div>
+  </section>
+
+  <section id="production">
+    <div class="col stack">
+      <p class="kicker">Production readiness</p>
+      <h2>More than a notebook</h2>
+    </div>
+    <div class="prod">
+      <div><h3>FastAPI service</h3><p>Day-ahead forecasts with p10/p50/p90 bands; refuses dates the data cannot support.</p></div>
+      <div><h3>Docker</h3><p>One image for the API, with model and data mounted at run time.</p></div>
+      <div><h3>MLflow</h3><p>Every backtest month, interval check and final model is logged and versioned.</p></div>
+      <div><h3>Drift monitoring</h3><p>Monthly PSI against the same month of 2024, so seasons are not mistaken for drift.</p></div>
+      <div><h3>Honest validation</h3><p>Rolling-origin backtests, leakage tests, placebo tests, bootstrap intervals.</p></div>
+      <div><h3>CI</h3><p>Ruff and <span id="tests-n">19</span> tests on every push; estimators are tested on fake data with a known answer.</p></div>
+    </div>
+    <pre class="code" aria-label="Sample API call">GET /forecast?zone=161&amp;date=2026-10-01
+
+{ "zone": 161, "date": "2026-10-01",
+  "hours": [ { "hour": 8,  "p10": 205.2, "p50": 247.1, "p90": 291.2 },
+             { "hour": 18, "p10": 557.2, "p50": 691.4, "p90": 797.9 }, ... ] }</pre>
+  </section>
+
+  <footer>
+    <div class="row">
+      <p>Data: <a href="https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page">NYC TLC trip records</a> · weather from <a href="https://open-meteo.com">Open-Meteo</a>. Tolling began 5 January 2025.</p>
+      <p><a class="repo-link" data-path="/blob/main/docs/MODEL_CARD.md" href="#">Model card</a> · <a class="repo-link" data-path="/blob/main/docs/LEARN.md" href="#">Methodology</a> · <a class="repo-link" data-path="" href="#">Code</a></p>
+    </div>
+  </footer>
+</main>
+
+<script src="data.js"></script>
+<script>
+(function () {
+  "use strict";
+  // Set this once the repository is public, e.g. "https://github.com/<you>/nyc-congestion".
+  var REPO_URL = "https://github.com/gss-18/nyc-congestion";
+  document.querySelectorAll(".repo-link").forEach(function (a) {
+    if (REPO_URL) { a.href = REPO_URL + a.dataset.path; } else { a.hidden = true; }
+  });
+
+  var D = window.SITE_DATA;
+  if (!D) return;
+  var NS = "http://www.w3.org/2000/svg";
+  var MINUS = "−";
+  function pct(x, d) { d = d == null ? 1 : d; var s = Math.abs(x).toFixed(d) + "%"; return (x < 0 ? MINUS : x > 0 ? "+" : "") + s; }
+  function el(tag, attrs, parent, text) {
+    var n = document.createElementNS(NS, tag);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function svg(w, h) { return el("svg", { viewBox: "0 0 " + w + " " + h, preserveAspectRatio: "xMidYMid meet" }); }
+  function scale(d0, d1, r0, r1) { return function (v) { return r0 + (v - d0) / (d1 - d0) * (r1 - r0); }; }
+  function setText(id, t) { var n = document.getElementById(id); if (n) n.textContent = t; }
+
+  var C = D.causal, main = C.main;
+
+  // Hero + stats
+  setText("v-naive", pct(C.sensitivity.no_adjustment.effect_pct_aggregate));
+  setText("v-main", pct(main.effect_pct_aggregate));
+  var lo = main.ci95_aggregate[0], hi = main.ci95_aggregate[1];
+  setText("v-main-note", "95% interval " + pct(lo) + " to " + pct(hi) + (hi >= 0 ? ": it includes zero." : ": small, and close to zero."));
+  setText("s-inside", D.units.inside);
+  setText("s-outside", D.units.outside);
+  setText("s-fzones", D.forecast.zones);
+  setText("s-wape", (D.forecast.overall.lightgbm.wape * 100).toFixed(1) + "%");
+  setText("t-pretrend", Math.abs(C.pretrend_pct_per_year).toFixed(0) + "%");
+  setText("tests-n", D.tests_passing);
+
+  // Event study chart
+  (function () {
+    var W = 980, H = 380, m = { l: 52, r: 20, t: 26, b: 40 };
+    var pts = C.event_study.concat([{ offset: -1, pct: 0, lo: 0, hi: 0, ref: true }]).sort(function (a, b) { return a.offset - b.offset; });
+    var xmin = pts[0].offset - 1, xmax = pts[pts.length - 1].offset + 1;
+    var ymin = -25, ymax = 30;
+    var x = scale(xmin, xmax, m.l, W - m.r), y = scale(ymin, ymax, H - m.b, m.t);
+    var s = svg(W, H);
+    [-20, -10, 0, 10, 20, 30].forEach(function (v) {
+      el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: v === 0 ? "zero" : "axis" }, s);
+      el("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, s, (v > 0 ? "+" : v < 0 ? MINUS : "") + Math.abs(v) + "%");
+    });
+    [-24, -18, -12, -6, 0, 6, 12, 18].forEach(function (v) {
+      el("text", { x: x(v), y: H - m.b + 18, "text-anchor": "middle" }, s, v === 0 ? "Jan 2025" : (v > 0 ? "+" : MINUS) + Math.abs(v) + " mo");
+    });
+    // pre-period linear trend extended
+    var pre = pts.filter(function (p) { return p.offset < 0; });
+    var n = pre.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    pre.forEach(function (p) { sx += p.offset; sy += p.pct; sxx += p.offset * p.offset; sxy += p.offset * p.pct; });
+    var b = (n * sxy - sx * sy) / (n * sxx - sx * sx), a = (sy - b * sx) / n;
+    el("path", { d: "M" + x(pts[0].offset) + "," + y(a + b * pts[0].offset) + "L" + x(pts[pts.length - 1].offset) + "," + y(a + b * pts[pts.length - 1].offset), class: "trend" }, s);
+    el("line", { x1: x(-0.5), x2: x(-0.5), y1: m.t - 6, y2: H - m.b, class: "policy" }, s);
+    el("text", { x: x(-0.5) + 6, y: m.t + 4, class: "policy-label" }, s, "Tolling begins, 5 Jan 2025");
+    pts.forEach(function (p) {
+      var post = p.offset >= 0 ? " post" : "";
+      if (!p.ref) el("line", { x1: x(p.offset), x2: x(p.offset), y1: y(p.lo), y2: y(p.hi), class: "whisker" + post }, s);
+      el("circle", { cx: x(p.offset), cy: y(p.pct), r: 3.6, class: "dot" + post }, s);
+    });
+    el("path", { d: "M" + x(-21) + "," + y(26) + " L" + x(-22.6) + "," + y(22), class: "annot-line" }, s);
+    el("text", { x: x(-20.7), y: y(27), class: "annot" }, s, "Decline begins before pricing");
+    el("path", { d: "M" + x(4) + "," + y(16) + " L" + x(1.2) + "," + y(5), class: "annot-line" }, s);
+    el("text", { x: x(4.3), y: y(17.5), class: "annot" }, s, "No break at the policy date");
+    el("text", { x: x(5), y: y(-21), class: "annot" }, s, "Same slope continues");
+    document.getElementById("chart-event").appendChild(s);
+  })();
+
+  // Monthly effect bars
+  (function () {
+    var W = 980, H = 260, m = { l: 52, r: 20, t: 18, b: 44 };
+    var rows = C.by_month, ymin = -10, ymax = 6;
+    var x = scale(0, rows.length, m.l, W - m.r), y = scale(ymin, ymax, H - m.b, m.t), bw = (W - m.l - m.r) / rows.length;
+    var s = svg(W, H);
+    [-10, -5, 0, 5].forEach(function (v) {
+      el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: v === 0 ? "zero" : "axis" }, s);
+      el("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, s, (v > 0 ? "+" : v < 0 ? MINUS : "") + Math.abs(v) + "%");
+    });
+    rows.forEach(function (r, i) {
+      var y0 = y(0), y1 = y(r.pct);
+      el("rect", { x: x(i) + bw * 0.18, width: bw * 0.64, y: Math.min(y0, y1), height: Math.max(1, Math.abs(y1 - y0)), class: "bar " + (r.pct < 0 ? "neg" : "pos") }, s);
+      if (r.month.slice(5) === "01" || i === 0) el("text", { x: x(i) + bw / 2, y: H - m.b + 18, "text-anchor": "middle" }, s, r.month.slice(0, 4));
+      if (i % 3 === 0) el("text", { x: x(i) + bw / 2, y: H - m.b + 32, "text-anchor": "middle" }, s, ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+r.month.slice(5) - 1]);
+    });
+    el("line", { x1: m.l, x2: W - m.r, y1: y(main.effect_pct_aggregate), y2: y(main.effect_pct_aggregate), class: "avg" }, s);
+    el("text", { x: W - m.r, y: y(main.effect_pct_aggregate) - 6, "text-anchor": "end", class: "policy-label" }, s, "average " + pct(main.effect_pct_aggregate));
+    document.getElementById("chart-months").appendChild(s);
+  })();
+
+  // Evidence table
+  (function () {
+    var o = C.outcomes, rows = [
+      ["Naive comparison (no trend, no seasonality)", C.sensitivity.no_adjustment.effect_pct_aggregate, null, ["warn", "misleading"]],
+      ["Imputation DiD, trend + seasonality (main)", main.effect_pct_aggregate, main.ci95_aggregate, null],
+      ["Placebo: fake policy in July 2024", C.placebo.effect_pct_aggregate, C.placebo.ci95_aggregate, ["ok", "passes"]],
+      ["Synthetic control (weekly)", C.synthetic.effect_pct, null, ["neutral", "not significant, p = " + C.synthetic.placebo_p_value.toFixed(2)]],
+      ["Off-peak pickups", o.fhvhv_pickups_offpeak.effect_pct_aggregate, o.fhvhv_pickups_offpeak.ci95_aggregate, null],
+      ["Peak pickups (weekdays 5am–9pm)", o.fhvhv_pickups_peak.effect_pct_aggregate, o.fhvhv_pickups_peak.ci95_aggregate, null],
+      ["Dropoffs inside the zone", o.fhvhv_dropoffs.effect_pct_aggregate, o.fhvhv_dropoffs.ci95_aggregate, null],
+      ["Border zones (spillover)", o.fhvhv_border_spillover.effect_pct_aggregate, o.fhvhv_border_spillover.ci95_aggregate, null]
+    ];
+    var tb = document.getElementById("evidence-rows");
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      var ci = r[2], tag = r[3];
+      if (!tag) tag = ci ? (ci[0] > 0 || ci[1] < 0 ? ["neutral", "excludes zero"] : ["neutral", "includes zero"]) : ["neutral", ""];
+      tr.innerHTML = "<td></td><td class='num'></td><td class='ci'></td><td><span class='pill " + tag[0] + "'></span></td>";
+      tr.children[0].textContent = r[0];
+      tr.children[1].textContent = pct(r[1]);
+      tr.children[2].textContent = ci ? pct(ci[0]) + " to " + pct(ci[1]) : "–";
+      tr.querySelector(".pill").textContent = tag[1];
+      tb.appendChild(tr);
+    });
+    var trow = document.createElement("tr");
+    trow.innerHTML = "<td>Pre-existing trend, inside vs outside</td><td class='num'></td><td class='ci'>–</td><td><span class='pill warn'>before tolling</span></td>";
+    trow.children[1].textContent = pct(C.pretrend_pct_per_year) + " / yr";
+    tb.appendChild(trow);
+    setText("estimand-text", "Total trips across the zone fell " + pct(main.effect_pct_aggregate) + " against the counterfactual (interval " +
+      pct(main.ci95_aggregate[0]) + " to " + pct(main.ci95_aggregate[1]) + "). The average zone fell " + pct(main.effect_pct_mean_zone) +
+      " (interval " + pct(main.ci95_mean_zone[0]) + " to " + pct(main.ci95_mean_zone[1]) + "). The first answers the policy question about total trips; the second weights a quiet zone the same as Times Square.");
+  })();
+
+  // Forecast
+  (function () {
+    var F = D.forecast, ex = F.example;
+    var ids = ["161", "79", "61", "132"].filter(function (k) { return ex[k]; }); // numeric keys would sort; keep Midtown first
+    var tabs = document.getElementById("zone-tabs");
+    function draw(id) {
+      var z = ex[id], n = z.actual.length, W = 980, H = 330, m = { l: 52, r: 16, t: 14, b: 38 };
+      var ymax = Math.max.apply(null, z.actual.concat(z.p90)) * 1.08;
+      var x = scale(0, n - 1, m.l, W - m.r), y = scale(0, ymax, H - m.b, m.t);
+      var s = svg(W, H);
+      var step = Math.pow(10, Math.floor(Math.log10(ymax / 4))), ticks = [];
+      var t = Math.ceil(ymax / 4 / step) * step;
+      for (var v = 0; v <= ymax; v += t) ticks.push(v);
+      ticks.forEach(function (v) {
+        el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: v === 0 ? "zero" : "axis" }, s);
+        el("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, s, Math.round(v));
+      });
+      var start = new Date(z.start + "T00:00:00");
+      for (var d = 0; d < 7; d++) {
+        var day = new Date(start.getTime() + d * 864e5);
+        el("line", { x1: x(d * 24), x2: x(d * 24), y1: m.t, y2: H - m.b, class: "axis" }, s);
+        el("text", { x: x(d * 24 + 12), y: H - m.b + 18, "text-anchor": "middle" }, s,
+          ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][day.getDay()] + " " + (day.getMonth() + 1) + "/" + day.getDate());
+      }
+      var band = "M" + z.p90.map(function (v, i) { return x(i) + "," + y(v); }).join("L") +
+        "L" + z.p10.map(function (v, i) { return [i, v]; }).reverse().map(function (p) { return x(p[0]) + "," + y(p[1]); }).join("L") + "Z";
+      el("path", { d: band, class: "band" }, s);
+      el("path", { d: "M" + z.actual.map(function (v, i) { return x(i) + "," + y(v); }).join("L"), class: "actual" }, s);
+      el("path", { d: "M" + z.p50.map(function (v, i) { return x(i) + "," + y(v); }).join("L"), class: "line" }, s);
+      el("text", { x: m.l + 4, y: m.t + 12, class: "ink" }, s, "pickups per hour");
+      var box = document.getElementById("chart-forecast");
+      box.innerHTML = "";
+      box.appendChild(s);
+      setText("forecast-caption", z.name + ", week of " + z.start + ". Error (WAPE) this week " + z.wape.toFixed(1) +
+        "%; " + z.coverage.toFixed(0) + "% of hours fell inside the 80% band. Model trained only on data before 1 September 2026.");
+      tabs.querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.id === id ? "true" : "false"); });
+    }
+    ids.forEach(function (id) {
+      var b = document.createElement("button");
+      b.type = "button"; b.id = "zone-" + id; b.dataset.id = id; b.textContent = ex[id].name;
+      b.addEventListener("click", function () { draw(id); });
+      tabs.appendChild(b);
+    });
+    draw(ids[0]);
+    var o = F.overall, cmp = document.getElementById("forecast-cmp");
+    [["LightGBM", o.lightgbm.wape, true], ["Same hour last week", o.naive_last_week.wape], ["7-day same-hour mean", o.mean_same_hour_7d.wape], ["Same hour yesterday", o.naive_yesterday.wape]].forEach(function (r) {
+      var d = document.createElement("div");
+      if (r[2]) d.className = "best";
+      d.innerHTML = "<div class='v'></div><div class='k'></div>";
+      d.children[0].textContent = (r[1] * 100).toFixed(1) + "%";
+      d.children[1].textContent = r[0];
+      cmp.appendChild(d);
+    });
+    var rel = (1 - o.lightgbm.wape / o.naive_last_week.wape) * 100;
+    var extra = document.createElement("div");
+    extra.style.gridColumn = "1 / -1";
+    extra.innerHTML = "<div class='k'></div>";
+    extra.children[0].textContent = rel.toFixed(0) + "% less error than the best baseline · p10–p90 band covers " +
+      (F.interval.coverage * 100).toFixed(1) + "% of actual hours (target 80%) · after the toll, a model trained only on pre-toll data still scored " +
+      (F.break.wape * 100).toFixed(1) + "% WAPE.";
+    cmp.appendChild(extra);
+  })();
+
+  // Switchback
+  (function () {
+    var S = D.switchback, rows = S.designs;
+    setText("sw-true", pct(S.true_effect * 100, 0));
+    setText("sw-power", (S.best.power * 100).toFixed(0) + "%");
+    function pick(L) {
+      var name = L >= 2 ? "+ FE + CUPED + 1h burn-in" : "+ hour-of-week FE";
+      return rows.filter(function (r) { return r.block_hours === L && r.estimator === name; })[0];
+    }
+    var cards = [
+      [1, "1-hour blocks", "Many blocks, so low noise, but riders' reaction spills into the next block. Recovers only about half the effect."],
+      [4, "4-hour blocks", "Best balance: small bias, small error, intervals that hold their 95% promise."],
+      [24, "24-hour blocks", "Almost no carryover bias, but few blocks, so the estimate is noisier."]
+    ];
+    var host = document.getElementById("blocks");
+    cards.forEach(function (c) {
+      var r = pick(c[0]), d = document.createElement("div");
+      if (c[0] === S.best.block_hours) d.className = "chosen";
+      var cells = "";
+      var pattern = c[0] === 1 ? [1,0,1,1,0,1,0,0,1,0,1,0] : c[0] === 4 ? [1,1,1,1,0,0,0,0,1,1,1,1] : [1,1,1,1,1,1,1,1,1,1,1,1];
+      pattern.forEach(function (v) { cells += "<span" + (v ? "" : " class='c'") + "></span>"; });
+      d.innerHTML = "<div class='len'></div><p class='muted mono small'></p><div class='timeline' aria-hidden='true'>" + cells + "</div><p></p>";
+      d.querySelector(".len").textContent = c[1];
+      d.querySelector(".mono").textContent = "bias " + (r.bias * 100 >= 0 ? "+" : MINUS) + Math.abs(r.bias * 100).toFixed(2) + " pts · RMSE " + (r.rmse * 100).toFixed(2) + " pts · coverage " + Math.round(r.ci95_coverage * 100) + "%";
+      d.querySelectorAll("p")[1].textContent = c[2];
+      host.appendChild(d);
+    });
+    var Ls = [1, 2, 4, 8, 24], W = 980, H = 260, m = { l: 52, r: 20, t: 18, b: 40 };
+    var x = scale(0, Ls.length - 1, m.l + 30, W - m.r - 30), ymax = 1.6, y = scale(0, ymax, H - m.b, m.t);
+    var s = svg(W, H);
+    [0, 0.4, 0.8, 1.2, 1.6].forEach(function (v) {
+      el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: v === 0 ? "zero" : "axis" }, s);
+      el("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, s, v.toFixed(1));
+    });
+    var bias = Ls.map(function (L, i) { return [x(i), y(pick(L).bias * 100)]; });
+    var rmse = Ls.map(function (L, i) { return [x(i), y(pick(L).rmse * 100)]; });
+    el("path", { d: "M" + bias.join("L"), class: "line" }, s);
+    el("path", { d: "M" + rmse.join("L"), class: "actual", "stroke-dasharray": "5 4" }, s);
+    bias.forEach(function (p) { el("circle", { cx: p[0], cy: p[1], r: 4.5, class: "dot" }, s); });
+    rmse.forEach(function (p) { el("circle", { cx: p[0], cy: p[1], r: 4, class: "ink" }, s); });
+    Ls.forEach(function (L, i) { el("text", { x: x(i), y: H - m.b + 20, "text-anchor": "middle", class: L === S.best.block_hours ? "policy-label" : "" }, s, L + "h blocks"); });
+    document.getElementById("chart-switch").appendChild(s);
+  })();
+})();
+</script>
+</body>
+</html>

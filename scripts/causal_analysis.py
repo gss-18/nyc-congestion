@@ -56,7 +56,7 @@ def main() -> None:
     results["units"] = counts
     print(f"zones: {counts}")
 
-    main_res = bootstrap(fhv, POLICY, reps=200)
+    main_res = bootstrap(fhv, POLICY, reps=5000)
     results["main_fhvhv_pickups"] = summarize(main_res)
     print("main:", results["main_fhvhv_pickups"])
 
@@ -68,7 +68,7 @@ def main() -> None:
     print("sensitivity:", results["sensitivity"])
 
     pre_only = fhv[fhv["period"] < "2025-01-01"]
-    results["placebo_jul_2024"] = summarize(bootstrap(pre_only, "2024-07-01", reps=200))
+    results["placebo_jul_2024"] = summarize(bootstrap(pre_only, "2024-07-01", reps=5000))
     print("placebo:", results["placebo_jul_2024"])
 
     outcomes = {
@@ -79,10 +79,10 @@ def main() -> None:
     }
     results["outcomes"] = {}
     for name, panel in outcomes.items():
-        results["outcomes"][name] = summarize(bootstrap(panel, POLICY, reps=100))
+        results["outcomes"][name] = summarize(bootstrap(panel, POLICY, reps=500))
         print(name, results["outcomes"][name])
     results["outcomes"]["fhvhv_border_spillover"] = summarize(
-        bootstrap(fhv, POLICY, reps=100, treated_group="border"))
+        bootstrap(fhv, POLICY, reps=500, treated_group="border"))
     print("border spillover:", results["outcomes"]["fhvhv_border_spillover"])
 
     es = event_study_twfe(fhv, POLICY)

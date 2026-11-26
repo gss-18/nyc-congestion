@@ -61,3 +61,12 @@ def test_synthetic_control_matches_a_mix_of_donors():
     w, synth = synthetic_control(treated, donors, pre)
     assert w[0] == pytest.approx(0.7, abs=0.05) and w[3] == pytest.approx(0.3, abs=0.05)
     assert rmspe_ratio(treated, synth, pre) < 5
+
+
+def test_bootstrap_is_reproducible_regardless_of_row_order():
+    from nyc_congestion.causal import bootstrap
+
+    df = fake_panel(effect=-0.05)
+    a = bootstrap(df, POLICY, reps=30)
+    b = bootstrap(df.sample(frac=1, random_state=3), POLICY, reps=30)
+    assert a.ci_aggregate == b.ci_aggregate
