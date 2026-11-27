@@ -9,6 +9,8 @@ congestion pricing, which began on 5 January 2025.
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)
 ![Docker](https://img.shields.io/badge/container-Docker-2496ed)
 
+**[Read the visual case study →](https://gss-18.github.io/nyc-congestion/site/)**
+
 ![Raw event study and trend-adjusted monthly effect](docs/img/event_study.png)
 
 ## Three results
@@ -91,7 +93,7 @@ Intervals are 95%, from 1,000 bootstrap resamples of zones. Full numbers and cha
 
 ## Inspect it quickly (no downloads)
 
-- Read the case study page: open `docs/site/index.html` in a browser.
+- Read the case study page: https://gss-18.github.io/nyc-congestion/site/
 - Read the methodology and every result: [docs/LEARN.md](docs/LEARN.md) and the [model card](docs/MODEL_CARD.md).
 - Run the tests, which use small fake data:
 
