@@ -153,51 +153,33 @@ The API only forecasts the day after its latest data, because every feature must
 
 ## Azure deployment architecture
 
-The forecast service is containerized and designed to run on Azure as below: serving on Container Apps, a monthly
-retraining job gated by the backtest and drift report, and identity-based access to storage and secrets.
+The forecast service is containerized and designed to run on Azure as below. The diagram is code:
+[`docs/architecture/azure_architecture.py`](docs/architecture/azure_architecture.py) (mingrammer/diagrams with the
+official Azure icons).
 
-```mermaid
-flowchart LR
-  subgraph CI[GitHub]
-    GH[Push to main] --> GA[GitHub Actions<br/>ruff + pytest]
-    GA --> IMG[Build Docker image]
-  end
-  IMG --> ACR[Azure Container Registry]
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/azure-architecture-dark.svg">
+  <img alt="Azure deployment architecture: GitHub Actions builds an image into Azure Container Registry; Azure Container Apps serves the FastAPI forecast API and reads approved models from Blob Storage; a monthly Container Apps Job retrains, logs to Azure Machine Learning and promotes a model only if it passes the WAPE and PSI gates" src="docs/img/azure-architecture-light.svg">
+</picture>
 
-  subgraph RETRAIN[Monthly retraining]
-    TMR[Azure Functions<br/>timer trigger] --> JOB[Container Apps Job<br/>download, aggregate, train]
-    JOB --> GATE{Backtest WAPE under 15%<br/>and PSI under 0.2?}
-  end
-  TLC[(NYC TLC<br/>monthly files)] --> JOB
-  WX[(Open-Meteo)] --> JOB
-  JOB --> AML[Azure ML workspace<br/>MLflow tracking + model registry]
-  GATE -- yes --> BLOB[(Blob Storage<br/>models + hourly tables)]
-  GATE -- no --> ALERT[Alert, keep current model]
-
-  ACR --> CA[Azure Container Apps<br/>FastAPI forecast API<br/>scale to zero]
-  BLOB --> CA
-  USER([API client]) --> CA
-
-  KV[Key Vault] -. managed identity .-> CA
-  KV -. managed identity .-> JOB
-  CA --> AI[Application Insights<br/>requests, latency, errors]
-  JOB --> AI
-  AI --> MON[Azure Monitor alerts<br/>live error and drift]
-```
+| Step | What happens |
+|---|---|
+| 1-3 | A push to `main` runs lint and tests in GitHub Actions, builds the image into Container Registry, and rolls out a new Container Apps revision |
+| 4-5 | A client calls the API over HTTPS; the API loads the approved model and recent hourly tables from Blob Storage |
+| A | Once a month a Container Apps Job downloads the new TLC trip file and weather |
+| B | The job retrains and logs runs and the candidate model to Azure Machine Learning (MLflow) |
+| C | The candidate replaces the live model only if backtest WAPE stays under 15% and demand PSI under 0.2; otherwise an alert fires and the API keeps the previous model |
+| Shared | Both apps use managed identities for Key Vault, send telemetry to Application Insights, and alert through Azure Monitor |
 
 | Piece | Azure service | Why |
 |---|---|---|
 | API serving | Container Apps | Runs the existing Docker image, scales to zero between requests |
 | Images | Container Registry | Private images built by GitHub Actions |
-| Retraining | Functions (timer) + Container Apps Job | Starts monthly when TLC publishes a new file; the job runs the same scripts as this repo |
+| Retraining | Container Apps Job (cron schedule) | Runs monthly when TLC publishes a new file, using the same scripts as this repo |
 | Experiment tracking | Azure ML workspace (MLflow) | Same `mlflow` calls as local, pointed at a hosted tracking server and model registry |
 | Models and data | Blob Storage | The API loads the approved model and recent hourly tables at start-up |
 | Secrets | Key Vault + managed identity | No keys in code or environment files |
 | Monitoring | Application Insights + Azure Monitor | Request logs, latency, live forecast error, and drift alerts |
-
-**Promotion rule:** a retrained model replaces the current one only if its backtest WAPE stays under 15% (the
-baseline level) and demand-feature PSI stays under 0.2; otherwise the job raises an alert and the API keeps serving
-the previous model.
 
 ## What I would improve in production
 
